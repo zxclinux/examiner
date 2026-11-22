@@ -41,6 +41,9 @@ class ExamSession:
         self._settings = settings
         self._rng = rng or random.Random()
         self.history: list[Message] = []
+        self._last_result: dict[str, Any] | None = None
+        self._last_record: dict[str, Any] | None = None
+        self._last_path = None
         self._reset_exam()
 
     def _reset_exam(self) -> None:
@@ -73,7 +76,9 @@ class ExamSession:
                 f"Subject '{subject}' not found. Available subjects: {', '.join(self._bank.subject_names)}. "
                 "Ask the student which one they choose."
             )
+        self.sync_result()
         self._reset_exam()
+        self._last_result = self._last_record = self._last_path = None
         k = min(self._settings.topics_per_exam, len(found.topics))
         self.name, self.subject = name, found
         self.topics = self._rng.sample(list(found.topics), k)
@@ -123,6 +128,8 @@ class ExamSession:
         }
 
     def end_exam(self, topic_scores: list[dict[str, Any]], feedback: str) -> dict[str, Any]:
+        if not self.in_progress and self._last_result:
+            return self._already_finished()
         self._require_exam()
         if self._topic_idx + 1 < len(self.topics):
             left = [t.name for t in self.topics[self._topic_idx + 1:]]
@@ -130,6 +137,8 @@ class ExamSession:
         return self._finish(topic_scores, feedback, completed=True)
 
     def quit_exam(self, topic_scores: list[dict[str, Any]], feedback: str) -> dict[str, Any]:
+        if not self.in_progress and self._last_result:
+            return self._already_finished()
         self._require_exam()
         return self._finish(topic_scores, feedback, completed=False)
 
@@ -149,13 +158,18 @@ class ExamSession:
         nmt = to_nmt_score([c["score"] for c in cleaned])
         self._save_result(nmt, cleaned, feedback, completed)
         self.in_progress = False
-        return {"nmt_score": nmt, "scale": "100..200", "completed": completed, "topic_scores": cleaned}
+        self._last_result = {"nmt_score": nmt, "scale": "100..200", "completed": completed, "topic_scores": cleaned}
+        return self._last_result
+
+    def _already_finished(self) -> dict[str, Any]:
+        return {**self._last_result, "already_finished": True,
+                "note": "The exam is already over. Show the student this result again; do not re-grade."}
 
     def _save_result(
         self, nmt_score: int, topic_scores: list[dict[str, Any]], feedback: str, completed: bool
     ) -> None:
         """Analogue of end_exam(email, score, history) from the assignment: writes the result to a file."""
-        self._store.save({
+        self._last_record = {
             "name": self.name,
             "subject": self.subject.name,
             "nmt_score": nmt_score,
@@ -164,7 +178,13 @@ class ExamSession:
             "completed": completed,
             "finished_at": datetime.now().isoformat(timespec="seconds"),
             "history": self.history,
-        })
+        }
+        self._last_path = self._store.save(self._last_record)
+
+    def sync_result(self) -> None:
+        """Rewrites the last result file with the full chat, including messages after end_exam."""
+        if self._last_record is not None:
+            self._store.save({**self._last_record, "history": self.history}, self._last_path)
 
     #helpers
 
@@ -272,7 +292,7 @@ TOOLS = [
     _function(
         "end_exam",
         "Finishes the exam: takes a 0..10 grade for each topic and short feedback, saves the result "
-        "and returns the score on the NMT scale (100..200).",
+        "and returns the score on the NMT scale (100..200). If the exam is already over, returns its result again.",
         {
             "topic_scores": _topic_scores_schema("Grade for each exam topic"),
             "feedback": _FEEDBACK_SCHEMA,
@@ -283,7 +303,8 @@ TOOLS = [
         "quit_exam",
         "Ends the exam early when the student does not want to continue. Takes grades only for the topics "
         "already discussed (including the current one; give 0 if its question went unanswered); topics not "
-        "reached yet are graded 0 automatically. Saves the result and returns the score on the NMT scale (100..200).",
+        "reached yet are graded 0 automatically. Saves the result and returns the score on the NMT scale (100..200). "
+        "If the exam is already over, returns its result again.",
         {
             "topic_scores": _topic_scores_schema("Grade for each topic discussed so far"),
             "feedback": _FEEDBACK_SCHEMA,

@@ -11,10 +11,12 @@ class ResultStore:
     def __init__(self, results_dir: Path) -> None:
         self._dir = results_dir
 
-    def save(self, record: dict[str, Any]) -> Path:
+    def save(self, record: dict[str, Any], path: Path | None = None) -> Path:
+        """Writes a new result file, or overwrites `path` (used to append the rest of the chat)."""
         self._dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-        path = self._dir / f"{stamp}_{_slug(record['name'])}.json"
+        if path is None:
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+            path = self._dir / f"{stamp}_{_slug(record['name'])}.json"
         path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
         return path
 

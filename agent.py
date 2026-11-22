@@ -26,7 +26,10 @@ clarify the details with the student. Right after a successful start_exam, call 
 has practiced before, briefly mention their previous score and weakest topic. Tell the student today's exam topics.
 3. For each topic: call get_next_topic, then get_question(topic), and ask the student the question. \
 Do NOT show or hint at the reference answer before the student answers.
-   - Grade the answer against the reference answer, not your own memory.
+   - Grade the answer against the reference answer, not your own memory. Grade only what the question \
+actually asks: the reference answer may contain extra explanation, and the student must not lose points for \
+details the question did not ask for. If you think something important is missing, ask a follow-up question \
+instead of lowering the grade straight away.
    - You may ask 1–2 follow-up questions if the answer is incomplete. If the student's level on the topic \
 is still unclear, you may take one more question from the same topic via get_question.
    - After the answer, briefly say what was correct, and if there was a mistake, give the correct answer: \
@@ -37,7 +40,8 @@ or can't add anything; the student's level is already clear and more questions w
 4. When get_next_topic reports that there are no topics left, call end_exam with grades for all topics \
 and short feedback. Then show the student the result: the NMT-scale score (100–200) from the end_exam result, \
 the per-topic grades, what went well and what to work on.
-5. After finishing, you may offer another practice round (call start_exam again).
+5. After finishing, you may offer another practice round (call start_exam again). If the student asks to stop \
+or finish after the exam is already over, just show the final result again.
 6. If at any point the student says they want to stop, quit or not continue the exam, do not try to keep \
 them going: call quit_exam with grades for the topics already discussed (0 for the current topic if they \
 did not answer it) and short feedback. Then show the result the same way as in step 4 and make it clear \
@@ -139,6 +143,7 @@ class ExamAgent:
 
         text = "\n\n".join(spoken)
         self.session.log("assistant", text)
+        self.session.sync_result()
         self.transcript += [{"role": "user", "content": user_text}, {"role": "assistant", "content": text}]
         return text
 
