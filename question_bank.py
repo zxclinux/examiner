@@ -22,15 +22,15 @@ class Subject:
     topics: tuple[Topic, ...]
 
     def topic(self, name: str) -> Topic | None:
-        key = _normalize(name)
-        return next((t for t in self.topics if _normalize(t.name) == key), None)
+        key = normalize(name)
+        return next((t for t in self.topics if normalize(t.name) == key), None)
 
 
 class QuestionBank:
     """Subjects -> topics -> questions with reference answers, loaded from a JSON file."""
 
     def __init__(self, subjects: list[Subject]) -> None:
-        self._subjects = {_normalize(s.name): s for s in subjects}
+        self._subjects = {normalize(s.name): s for s in subjects}
 
     @classmethod
     def from_file(cls, path: Path) -> "QuestionBank":
@@ -52,8 +52,8 @@ class QuestionBank:
         return [s.name for s in self._subjects.values()]
 
     def subject(self, name: str) -> Subject | None:
-        return self._subjects.get(_normalize(name))
+        return self._subjects.get(normalize(name))
 
 
-def _normalize(text: str) -> str:
+def normalize(text: str) -> str:
     return " ".join(text.lower().replace("’", "'").split())

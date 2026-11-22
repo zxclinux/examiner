@@ -7,7 +7,7 @@ from statistics import mean
 from typing import Any, Literal, TypedDict
 
 from config import Settings
-from question_bank import QuestionBank, Subject, Topic
+from question_bank import QuestionBank, Subject, Topic, normalize
 from storage import ResultStore
 
 
@@ -89,7 +89,7 @@ class ExamSession:
 
     def get_question(self, topic: str) -> dict[str, Any]:
         current = self._current_topic()
-        if current.name.lower() != topic.strip().lower():
+        if normalize(current.name) != normalize(topic):
             raise ToolError(f"The current topic is '{current.name}'. Take questions from it.")
         remaining = [q for q in current.questions if q.id not in self._asked]
         if not remaining:
@@ -135,14 +135,14 @@ class ExamSession:
 
     def _finish(self, topic_scores: list[dict[str, Any]], feedback: str, completed: bool) -> dict[str, Any]:
         """Grades discussed topics from topic_scores; topics never reached get 0 and are marked skipped."""
-        scores_by_topic = {str(item.get("topic", "")).strip().lower(): item.get("score") for item in topic_scores}
+        scores_by_topic = {normalize(str(item.get("topic", ""))): item.get("score") for item in topic_scores}
         cleaned = []
         for idx, topic in enumerate(self.topics):
             if idx > self._topic_idx:
                 cleaned.append({"topic": topic.name, "score": 0.0, "skipped": True})
                 continue
-            score = scores_by_topic.get(topic.name.lower())
-            if not isinstance(score, (int, float)) or not 0 <= score <= 10:
+            score = scores_by_topic.get(normalize(topic.name))
+            if isinstance(score, bool) or not isinstance(score, (int, float)) or not 0 <= score <= 10:
                 raise ToolError(f"A grade from 0..10 is required for topic '{topic.name}'.")
             cleaned.append({"topic": topic.name, "score": float(score)})
 

@@ -13,7 +13,7 @@ class ResultStore:
 
     def save(self, record: dict[str, Any]) -> Path:
         self._dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         path = self._dir / f"{stamp}_{_slug(record['name'])}.json"
         path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
         return path
