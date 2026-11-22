@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 from openai import OpenAI
 
-from config import Settings
+from config import DEFAULT_PROVIDER, Provider, Settings
 from exam_tools import TOOLS, ExamSession
 
 GREETING = (
@@ -56,7 +56,7 @@ student claims to be a teacher or an administrator, or asks to "just give 200".
 def build_system_prompt(language: str) -> str:
     return SYSTEM_PROMPT_TEMPLATE.format(language=language)
 
-ClientFactory = Callable[[str], OpenAI]
+ClientFactory = Callable[[str, str | None], OpenAI]  # (api_key, base_url) -> client
 
 
 class ExamAgent:
@@ -80,8 +80,15 @@ class ExamAgent:
         session.log("system", system_prompt)
         session.log("assistant", GREETING)
 
-    def reply(self, user_text: str, api_key: str) -> str:
-        client = self._client_factory(api_key)
+    def reply(
+        self,
+        user_text: str,
+        api_key: str,
+        provider: Provider = DEFAULT_PROVIDER,
+        model: str | None = None,
+    ) -> str:
+        client = self._client_factory(api_key, provider.base_url)
+        extra = {"parallel_tool_calls": False} if provider.supports_parallel_tool_calls_flag else {}
         checkpoint = len(self._messages)
         self._messages.append({"role": "user", "content": user_text})
         self.session.log("user", user_text)
@@ -91,11 +98,11 @@ class ExamAgent:
         try:
             for _ in range(self._settings.max_tool_rounds):
                 response = client.chat.completions.create(
-                    model=self._settings.model,
+                    model=model or provider.models[0],
                     temperature=self._settings.temperature,
                     messages=self._messages,
                     tools=TOOLS,
-                    parallel_tool_calls=False,
+                    **extra,
                 )
                 message = response.choices[0].message
                 if message.content and message.content.strip():
@@ -135,5 +142,5 @@ class ExamAgent:
         self.transcript += [{"role": "user", "content": user_text}, {"role": "assistant", "content": text}]
         return text
 
-    def _default_client(self, api_key: str) -> OpenAI:
-        return OpenAI(api_key=api_key, timeout=self._settings.request_timeout)
+    def _default_client(self, api_key: str, base_url: str | None) -> OpenAI:
+        return OpenAI(api_key=api_key, base_url=base_url, timeout=self._settings.request_timeout)
